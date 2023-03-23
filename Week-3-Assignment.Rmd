@@ -1,0 +1,162 @@
+---
+title: "Week 3 Assignment"
+author: "Aryeh S"
+date: "3/6/2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+# NOTE: I used the patchwork package in this analysis. Please install it before 
+# knitting the data
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lubridate)
+library(patchwork)
+```
+
+# NYC Shooting Data
+
+The following data set contains information regarding shooting data in NY 
+during the years of 2006-2021. We will look at some demographic information
+regarding the victims and perpetrators.
+
+## Data Import and preparation for analysis
+
+```{r Import and Clean Data}
+#load data 
+shooting_data=read_csv("https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD")
+
+# get a quick look
+glimpse(shooting_data)
+
+# remove unwanted columns
+(shooting_data = shooting_data %>% 
+  select(-c(INCIDENT_KEY,PRECINCT,JURISDICTION_CODE,
+            X_COORD_CD,Y_COORD_CD,Latitude,Longitude,Lon_Lat,LOCATION_DESC)))
+
+# see unique values for variables of interest and set values for NA accordingly
+unique(shooting_data$PERP_AGE_GROUP)
+shooting_data$PERP_AGE_GROUP = replace_na(shooting_data$PERP_AGE_GROUP,"UNKNOWN")
+
+unique(shooting_data$PERP_SEX)
+shooting_data$PERP_SEX = replace_na(shooting_data$PERP_SEX,"U")
+
+unique(shooting_data$PERP_RACE)
+shooting_data$PERP_RACE = replace_na(shooting_data$PERP_RACE,"UNKNOWN")
+
+# change data types to appropriate type
+shooting_data = shooting_data %>%
+  mutate(OCCUR_DATE = parse_date(OCCUR_DATE, format = "%m/%d/%Y"),
+         OCCUR_MONTH =format(as.Date(OCCUR_DATE, format="%Y-%m-%d"),"%m"),
+         PERP_AGE_GROUP = factor(PERP_AGE_GROUP),
+         PERP_SEX = factor(PERP_SEX),
+         PERP_RACE = factor(PERP_RACE),
+         VIC_AGE_GROUP =factor(VIC_AGE_GROUP),
+         VIC_SEX = factor(VIC_SEX),
+         VIC_RACE =factor(VIC_RACE),
+         BORO=factor(BORO),
+         Time_of_Day = as.integer(str_sub(shooting_data$OCCUR_TIME,start=1,end=2)),
+        DAY_OF_WEEK =wday(OCCUR_DATE),
+        YEAR=year(OCCUR_DATE)
+         )%>%
+# filter outliers  
+         filter(PERP_AGE_GROUP!=940 & PERP_AGE_GROUP!=224 & PERP_AGE_GROUP!=1020) %>%
+         filter(!grepl('AMERICAN INDIAN/ALASKAN NATIVE',PERP_RACE))%>%
+         filter(!grepl('ASIAN / PACIFIC ISLANDER',PERP_RACE))%>%
+         filter(!grepl('AMERICAN INDIAN/ALASKAN NATIVE',VIC_RACE))%>%
+         filter(!grepl('ASIAN / PACIFIC ISLANDER',VIC_RACE))
+
+
+# When we look at the data now, we see that it is ready for analysis!
+summary(shooting_data)
+```
+## Data Visualization
+```{r Analysis}
+p1 = ggplot(shooting_data, aes(x=PERP_SEX))+ geom_bar(fill="blue")+
+  labs(x="Sex of Perpetrator",y="Number of Occurences")
+p2 = ggplot(shooting_data, aes(x=PERP_RACE))+ geom_bar(fill="red")+
+  labs(x="Race of Perpetrator",y="Number of Occurences")
+p3 = ggplot(shooting_data, aes(x=PERP_AGE_GROUP))+ geom_bar(fill= "orange")+
+  labs(x="Age Group of Perpetrator",y="Number of Occurences")
+p4 = ggplot(shooting_data, aes(x=VIC_SEX))+ geom_bar(fill="blue")+
+  labs(x="Sex of Victim",y="Number of Occurences")
+p5 = ggplot(shooting_data, aes(x=VIC_RACE))+ geom_bar(fill="red")+
+  labs(x="Race of Victim",y="Number of Occurences")
+p6 = ggplot(shooting_data, aes(x=VIC_AGE_GROUP))+ geom_bar(fill="orange")+
+  labs(x="Age Group of Victim",y="Number of Occurences")
+
+# Plotting Sex of Perpetrator and Victim
+p1/p4
+# Plotting Race of Perpetrator and Victim
+p2/p5
+# Plotting Race
+p3/p6
+
+```
+In Plot #1 We can see that the vast majority of perpetrators and victims are male.
+It is interesting that there many cases were the sex of the perpetrator is given
+as unknown, but there are very few unknowns in the set of victims.
+It is unclear why this is the case-perphaps the perpetrator
+escaped the police and could not be identified-but it seems plausible to assume
+that the significant majority of the unkown perpetrators were male
+
+In plot #2, we again find many cases where the race of the perpetrator is unknown.
+However, for the data we do have, we find that black population is highly 
+over represented in both the perpetrator and victim groups.
+
+In plot #3, we again find many cases where the age of the perpetrator is unknown,
+but for the data we have, we can see that the bulk of victims and perpetrators were 
+between the ages of 18-44.
+
+```{r Data Analysis }
+#percentage of shootings that resulted in deaths
+(percent_murders = mean(shooting_data$STATISTICAL_MURDER_FLAG))
+
+#showing crimes that resulted in homicide vs only injured victim
+ggplot(shooting_data,aes(x=STATISTICAL_MURDER_FLAG))+
+  geom_bar(fill="purple")
+#showing where the crimes took place
+ggplot(shooting_data,
+       aes(x=reorder(BORO,BORO,function(x)-length(x)))) +
+  geom_bar(fill="green") +
+  xlab("BORO")
+
+#showing when the crimes took place
+p1=ggplot(shooting_data,aes(x=DAY_OF_WEEK))+
+  geom_bar(fill="blue")
+p2=ggplot(shooting_data,aes(x=OCCUR_MONTH))+
+  geom_bar(fill="red")
+p3=ggplot(shooting_data,aes(x=Time_of_Day))+
+  geom_bar(fill="orange")
+p4=ggplot(shooting_data,aes(x=YEAR))+
+  geom_bar(fill="purple")
+
+
+p1
+p2
+p3
+p4
+```
+We can see that:
+1) Brooklyn had the most crimes
+2) Crimes occured most frequently on the weekend and in the summer months
+3) the proportion of shootings that results in deaths is ~19%
+4) there was a general decrease in shootings from 2005-2020, followed by
+a sharp uptick
+
+## Bias Discussion
+
+It is possible that the police were more or less active in certain areas and
+with certain demographics, this would result in a disproportionate reporting
+for certain categories of data. The population data for New York, which is not
+contained in this dataset, may be inherently non-uniform. This would result
+in different expected values for different demographics. If so, the skewed results
+we saw in this dataset would not be unexpected. This would require a further detailed
+analysis
+
+```{r session info}
+sessionInfo()
+```
+
+
